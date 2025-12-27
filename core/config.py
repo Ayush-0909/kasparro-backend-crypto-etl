@@ -1,8 +1,8 @@
-from core.database import engine
-from schemas.crypto import Base
+import os
+from dotenv import load_dotenv
 
-def init_db():
-    """
-    Create all database tables.
-    """
-    Base.metadata.create_all(bind=engine)
+# Load .env file
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+COIN_API_KEY = os.getenv("COIN_API_KEY")

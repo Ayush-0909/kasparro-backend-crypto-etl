@@ -1,48 +1,27 @@
-import requests
 import json
-from datetime import datetime
-from sqlalchemy.orm import Session
-
-from schemas.crypto import RawCoinPaprika, CryptoAsset
+import requests
 from core.database import SessionLocal
+from schemas.crypto import RawCoinPaprika
 
 COINPAPRIKA_URL = "https://api.coinpaprika.com/v1/tickers"
 
 
 def ingest_coinpaprika():
-    db: Session = SessionLocal()
+    db = SessionLocal()
 
     try:
         response = requests.get(COINPAPRIKA_URL, timeout=10)
         response.raise_for_status()
-        coins = response.json()
 
-        for coin in coins[:50]:  # limit to 50 to stay safe
-            # ----------------------
-            # Store RAW data (P0)
-            # ----------------------
-            raw = RawCoinPaprika(
-                data=json.dumps(coin),
-                fetched_at=datetime.utcnow()
-            )
-            db.add(raw)
+        data = response.json()
 
-            # ----------------------
-            # Normalize data (P1)
-            # ----------------------
-            asset = CryptoAsset(
-                coin_name=coin.get("name"),
-                symbol=coin.get("symbol"),
-                price_usd=coin.get("quotes", {}).get("USD", {}).get("price"),
-                market_cap=coin.get("quotes", {}).get("USD", {}).get("market_cap"),
-                volume_24h=coin.get("quotes", {}).get("USD", {}).get("volume_24h"),
-                source="coinpaprika",
-                last_updated=datetime.utcnow()
-            )
-            db.add(asset)
+        # Store FULL raw response
+        raw_record = RawCoinPaprika(
+            payload=json.dumps(data)
+        )
 
+        db.add(raw_record)
         db.commit()
-        print("✅ CoinPaprika ingestion completed")
 
     except Exception as e:
         db.rollback()

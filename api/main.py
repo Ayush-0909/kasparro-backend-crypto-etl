@@ -1,45 +1,53 @@
-from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
 import time
 import uuid
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
 
-from core.database import get_db
-from core.config import init_db
+from core.database import SessionLocal
 from schemas.crypto import CryptoAsset, ETLRun
 
-# -------------------------
-# CREATE APP FIRST
-# -------------------------
 app = FastAPI(title="Crypto ETL Backend")
 
-# -------------------------
-# STARTUP EVENT
-# -------------------------
-@app.on_event("startup")
-def startup_event():
-    init_db()
 
-# -------------------------
-# HEALTH ENDPOINT
-# -------------------------
-@app.get("/health")
-def health_check(db: Session = Depends(get_db)):
+# =========================
+# DB Dependency
+# =========================
+def get_db():
+    db = SessionLocal()
     try:
-        db.execute("SELECT 1")
+        yield db
+    finally:
+        db.close()
+
+
+# =========================
+# HEALTH CHECK
+# =========================
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    try:
+        last_run = (
+            db.query(ETLRun)
+            .order_by(ETLRun.run_time.desc())
+            .first()
+        )
+
         return {
             "status": "ok",
-            "db": "connected"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "db": "disconnected",
-            "error": str(e)
+            "db_connected": True,
+            "last_etl_status": last_run.status if last_run else "unknown"
         }
 
-# -------------------------
+    except Exception:
+        return {
+            "status": "error",
+            "db_connected": False
+        }
+
+
+# =========================
 # DATA ENDPOINT
-# -------------------------
+# =========================
 @app.get("/data")
 def get_data(
     limit: int = 10,
@@ -79,23 +87,34 @@ def get_data(
         "data": data
     }
 
-# -------------------------
+
+# =========================
 # STATS ENDPOINT
-# -------------------------
+# =========================
 @app.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
-    last_run = (
+def stats(db: Session = Depends(get_db)):
+    runs = (
         db.query(ETLRun)
         .order_by(ETLRun.run_time.desc())
-        .first()
+        .limit(10)
+        .all()
     )
 
-    if not last_run:
-        return {"message": "No ETL runs found"}
-
     return {
-        "records_processed": last_run.records_processed,
-        "duration_sec": last_run.duration_sec,
-        "status": last_run.status,
-        "last_run_time": last_run.run_time
+        "total_runs": len(runs),
+        "last_success": next(
+            (r.run_time for r in runs if r.status == "success"), None
+        ),
+        "last_failure": next(
+            (r.run_time for r in runs if r.status == "failed"), None
+        ),
+        "runs": [
+            {
+                "records_processed": r.records_processed,
+                "duration_sec": r.duration_sec,
+                "status": r.status,
+                "run_time": r.run_time
+            }
+            for r in runs
+        ]
     }

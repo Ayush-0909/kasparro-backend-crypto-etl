@@ -1,8 +1,8 @@
 up:
-	docker-compose up --build
+	docker compose up --build
 
 down:
-	docker-compose down
+	docker compose down
 
 test:
-	docker-compose run backend pytest
+	python -m pytest

@@ -1,27 +1,24 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 import os
+from pathlib import Path
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+from dotenv import load_dotenv
+
+# Load .env BEFORE anything else
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=BASE_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# If not running in Docker, use SQLite locally
+# Fallback to SQLite with ABSOLUTE path
 if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///./crypto.db"
+    DATABASE_URL = f"sqlite:///{BASE_DIR / 'app.db'}"
 
-# Create engine
-engine = create_engine(DATABASE_URL)
-
-# Create session
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 )
 
-# Dependency for FastAPI
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()

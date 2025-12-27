@@ -1,4 +1,15 @@
+# Python
 __pycache__/
 *.pyc
+
+# Environment
 .env
-crypto.db
+
+# Local database
+*.db
+
+# Local data
+data/
+
+# OS
+.DS_Store

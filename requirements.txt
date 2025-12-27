@@ -1,10 +1,8 @@
 fastapi
 uvicorn
-requests
-pydantic
 sqlalchemy
 psycopg2-binary
-python-dotenv
-tenacity
-prometheus-client
+requests
+pydantic
 pytest
+python-dotenv
