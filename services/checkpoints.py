@@ -1,27 +1,22 @@
 from datetime import datetime
-from core.database import SessionLocal
+from sqlalchemy.orm import Session
 from schemas.crypto import ETLCheckpoint
 
 
-def get_checkpoint(source: str):
-    db = SessionLocal()
+def get_checkpoint(db: Session, source: str) -> ETLCheckpoint:
     checkpoint = db.query(ETLCheckpoint).filter_by(source=source).first()
-    db.close()
+    if not checkpoint:
+        checkpoint = ETLCheckpoint(
+            source=source,
+            last_processed_at=datetime.min  # 👈 VERY IMPORTANT
+        )
+        db.add(checkpoint)
+        db.commit()
+        db.refresh(checkpoint)
     return checkpoint
 
 
-def update_checkpoint(source: str):
-    db = SessionLocal()
-    checkpoint = db.query(ETLCheckpoint).filter_by(source=source).first()
-
-    if checkpoint:
-        checkpoint.last_processed_at = datetime.utcnow()
-    else:
-        checkpoint = ETLCheckpoint(
-            source=source,
-            last_processed_at=datetime.utcnow()
-        )
-        db.add(checkpoint)
-
+def update_checkpoint(db: Session, source: str, last_processed_at: datetime):
+    checkpoint = get_checkpoint(db, source)
+    checkpoint.last_processed_at = last_processed_at
     db.commit()
-    db.close()
