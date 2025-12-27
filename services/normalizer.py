@@ -1,99 +1,87 @@
-from core.database import SessionLocal
-from schemas.crypto import CryptoAsset, RawCryptoCSV, RawCoinPaprika, RawCoinGecko
+from sqlalchemy.orm import Session
+from schemas.crypto import (
+    RawCryptoCSV,
+    RawCoinPaprika,
+    RawCoinGecko,
+    CryptoAsset
+)
 from services.checkpoints import get_checkpoint, update_checkpoint
 
 
-# =======================
+# =========================
 # CSV NORMALIZATION
-# =======================
-def normalize_csv():
-    db = SessionLocal()
+# =========================
+def normalize_csv(db: Session):
     checkpoint = get_checkpoint(db, "csv")
 
     rows = db.query(RawCryptoCSV).all()
     if not rows:
-        db.close()
         return
 
-    latest_time = checkpoint.last_processed_at
-
-    for r in rows:
-        if r.last_updated <= checkpoint.last_processed_at:
-            continue
-
+    for row in rows:
         asset = CryptoAsset(
-            coin_name=r.coin_name,
-            symbol=r.symbol,
-            price_usd=r.price_usd,
-            market_cap=r.market_cap,
-            volume_24h=r.volume_24h,
+            coin_name=row.coin_name,
+            symbol=row.symbol,
+            price_usd=row.price_usd,
+            market_cap=row.market_cap,
+            volume_24h=row.volume_24h,
             source="csv",
-            last_updated=r.last_updated
+            last_updated=row.last_updated
         )
         db.add(asset)
 
-        if r.last_updated > latest_time:
-            latest_time = r.last_updated
-
+    update_checkpoint(db, "csv")
     db.commit()
-    update_checkpoint(db, "csv", latest_time)
-    db.close()
 
 
-# =======================
+# =========================
 # COINPAPRIKA NORMALIZATION
-# =======================
-def normalize_coinpaprika():
-    db = SessionLocal()
+# =========================
+def normalize_coinpaprika(db: Session):
     checkpoint = get_checkpoint(db, "coinpaprika")
 
     rows = db.query(RawCoinPaprika).all()
     if not rows:
-        db.close()
         return
 
-    # Minimal normalization (enough for test + assignment)
-    for r in rows:
+    for row in rows:
+        # payload is stored as string, skip deep parsing for now
         asset = CryptoAsset(
-            coin_name="Bitcoin",
-            symbol="BTC",
-            price_usd=0,
-            market_cap=0,
-            volume_24h=0,
+            coin_name="coinpaprika_asset",
+            symbol="CP",
+            price_usd=None,
+            market_cap=None,
+            volume_24h=None,
             source="coinpaprika",
-            last_updated=checkpoint.last_processed_at
+            last_updated=None
         )
         db.add(asset)
 
+    update_checkpoint(db, "coinpaprika")
     db.commit()
-    update_checkpoint(db, "coinpaprika", checkpoint.last_processed_at)
-    db.close()
 
 
-# =======================
+# =========================
 # COINGECKO NORMALIZATION
-# =======================
-def normalize_coingecko():
-    db = SessionLocal()
+# =========================
+def normalize_coingecko(db: Session):
     checkpoint = get_checkpoint(db, "coingecko")
 
     rows = db.query(RawCoinGecko).all()
     if not rows:
-        db.close()
         return
 
-    for r in rows:
+    for row in rows:
         asset = CryptoAsset(
-            coin_name="Bitcoin",
-            symbol="BTC",
-            price_usd=0,
-            market_cap=0,
-            volume_24h=0,
+            coin_name="coingecko_asset",
+            symbol="CG",
+            price_usd=None,
+            market_cap=None,
+            volume_24h=None,
             source="coingecko",
-            last_updated=checkpoint.last_processed_at
+            last_updated=None
         )
         db.add(asset)
 
+    update_checkpoint(db, "coingecko")
     db.commit()
-    update_checkpoint(db, "coingecko", checkpoint.last_processed_at)
-    db.close()

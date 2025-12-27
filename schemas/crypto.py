@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime
 from core.database import Base
 
+# --- RAW TABLES ---
 class RawCryptoCSV(Base):
     __tablename__ = "raw_crypto_csv"
     id = Column(Integer, primary_key=True)
@@ -25,17 +26,19 @@ class RawCoinGecko(Base):
     payload = Column(String)
     ingested_at = Column(DateTime, default=datetime.utcnow)
 
+# --- NORMALIZED ---
 class CryptoAsset(Base):
     __tablename__ = "crypto_assets"
     id = Column(Integer, primary_key=True)
-    coin_name = Column(String)
-    symbol = Column(String)
+    coin_name = Column(String, nullable=False)
+    symbol = Column(String, nullable=False)
     price_usd = Column(Float)
     market_cap = Column(Float)
     volume_24h = Column(Float)
     source = Column(String)
     last_updated = Column(DateTime)
 
+# --- ETL RUN METADATA ---
 class ETLRun(Base):
     __tablename__ = "etl_runs"
     id = Column(Integer, primary_key=True)
@@ -43,12 +46,10 @@ class ETLRun(Base):
     duration_sec = Column(Integer)
     status = Column(String)
     run_time = Column(DateTime, default=datetime.utcnow)
-# =========================
-# ETL CHECKPOINT TABLE
-# =========================
+
+# --- CHECKPOINT ---
 class ETLCheckpoint(Base):
     __tablename__ = "etl_checkpoints"
-
     id = Column(Integer, primary_key=True)
     source = Column(String, unique=True, nullable=False)
-    last_processed_at = Column(DateTime, default=datetime.min)
+    last_processed_at = Column(DateTime)

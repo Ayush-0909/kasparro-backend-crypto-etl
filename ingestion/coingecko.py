@@ -1,51 +1,24 @@
 import json
 import requests
-import os
-
-from core.database import SessionLocal
+from datetime import datetime
 from schemas.crypto import RawCoinGecko
+from core.config import COINGECKO_API_URL
 
-COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets"
 
+def ingest_coingecko(db):
+    print("🌐 CoinGecko ingestion started")
 
-def ingest_coingecko():
-    db = SessionLocal()
+    response = requests.get(COINGECKO_API_URL, timeout=30)
+    response.raise_for_status()
 
-    try:
-        params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 50,
-            "page": 1,
-            "sparkline": False
-        }
+    data = response.json()
 
-        headers = {}
-        api_key = os.getenv("COIN_API_KEY")
-        if api_key:
-            headers["X-API-KEY"] = api_key
+    record = RawCoinGecko(
+        payload=json.dumps(data),
+        ingested_at=datetime.utcnow()
+    )
 
-        response = requests.get(
-            COINGECKO_URL,
-            params=params,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
+    db.add(record)
+    db.commit()
 
-        data = response.json()
-
-        # Store FULL raw response
-        raw_record = RawCoinGecko(
-            payload=json.dumps(data)
-        )
-
-        db.add(raw_record)
-        db.commit()
-
-    except Exception as e:
-        db.rollback()
-        print("❌ CoinGecko ingestion failed:", e)
-
-    finally:
-        db.close()
+    print("🌐 CoinGecko ingestion completed")

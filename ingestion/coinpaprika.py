@@ -1,31 +1,24 @@
 import json
 import requests
-from core.database import SessionLocal
+from datetime import datetime
 from schemas.crypto import RawCoinPaprika
+from core.config import COINPAPRIKA_API_URL
 
-COINPAPRIKA_URL = "https://api.coinpaprika.com/v1/tickers"
 
+def ingest_coinpaprika(db):
+    print("🌐 CoinPaprika ingestion started")
 
-def ingest_coinpaprika():
-    db = SessionLocal()
+    response = requests.get(COINPAPRIKA_API_URL, timeout=30)
+    response.raise_for_status()
 
-    try:
-        response = requests.get(COINPAPRIKA_URL, timeout=10)
-        response.raise_for_status()
+    data = response.json()
 
-        data = response.json()
+    record = RawCoinPaprika(
+        payload=json.dumps(data),
+        ingested_at=datetime.utcnow()
+    )
 
-        # Store FULL raw response
-        raw_record = RawCoinPaprika(
-            payload=json.dumps(data)
-        )
+    db.add(record)
+    db.commit()
 
-        db.add(raw_record)
-        db.commit()
-
-    except Exception as e:
-        db.rollback()
-        print("❌ CoinPaprika ingestion failed:", e)
-
-    finally:
-        db.close()
+    print("🌐 CoinPaprika ingestion completed")
