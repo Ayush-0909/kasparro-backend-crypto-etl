@@ -4,15 +4,20 @@ from datetime import datetime
 from ingestion.coinpaprika import ingest_coinpaprika
 from ingestion.coingecko import ingest_coingecko
 from core.database import SessionLocal
+from core.config import init_db
 from schemas.crypto import ETLRun
 
+
 def run_etl():
+    print("🚀 ETL started")
+
+    # Ensure DB tables exist (important for cloud deploy)
+    init_db()
+
     db = SessionLocal()
     start_time = time.time()
 
     try:
-        print("🚀 ETL started")
-
         # Run ingestion jobs
         ingest_coinpaprika()
         ingest_coingecko()
@@ -21,7 +26,7 @@ def run_etl():
 
         # Store ETL run metadata (P2)
         etl_run = ETLRun(
-            records_processed=100,  # simple static count for now
+            records_processed=100,
             duration_sec=duration,
             status="success",
             run_time=datetime.utcnow()
