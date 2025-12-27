@@ -6,3 +6,4 @@ requests
 pydantic
 pytest
 python-dotenv
+httpx
