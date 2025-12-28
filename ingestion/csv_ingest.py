@@ -1,12 +1,19 @@
 from datetime import datetime
+from sqlalchemy.orm import Session
+
 from schemas.crypto import RawCryptoCSV
 
-def ingest_csv(db):
+
+def ingest_csv(db: Session) -> None:
     """
-    Ingest CSV data into raw_crypto_csv table
+    Ingest data from a CSV source into raw_crypto_csv table.
+    Incremental-safe at raw level (no normalization here).
     """
 
-    sample_rows = [
+    print("📄 CSV ingestion started")
+
+    # Example CSV rows (replace with real CSV parsing if needed)
+    csv_rows = [
         {
             "coin_name": "Bitcoin",
             "symbol": "BTC",
@@ -17,8 +24,18 @@ def ingest_csv(db):
         }
     ]
 
-    for row in sample_rows:
-        record = RawCryptoCSV(**row)
+    for row in csv_rows:
+        record = RawCryptoCSV(
+            coin_name=row["coin_name"],
+            symbol=row["symbol"],
+            price_usd=row["price_usd"],
+            market_cap=row["market_cap"],
+            volume_24h=row["volume_24h"],
+            last_updated=row["last_updated"],
+            ingested_at=datetime.utcnow(),
+        )
         db.add(record)
 
     db.commit()
+
+    print("📄 CSV ingestion completed")

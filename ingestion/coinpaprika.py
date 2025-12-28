@@ -1,11 +1,13 @@
 import json
-import requests
 from datetime import datetime
+import requests
+from sqlalchemy.orm import Session
+
 from schemas.crypto import RawCoinPaprika
 from core.config import COINPAPRIKA_API_URL
 
 
-def ingest_coinpaprika(db):
+def ingest_coinpaprika(db: Session) -> None:
     print("🌐 CoinPaprika ingestion started")
 
     response = requests.get(COINPAPRIKA_API_URL, timeout=30)
@@ -14,7 +16,7 @@ def ingest_coinpaprika(db):
     data = response.json()
 
     record = RawCoinPaprika(
-        payload=json.dumps(data),
+        payload=json.dumps(data),  # ✅ FIX: serialize list → string
         ingested_at=datetime.utcnow()
     )
 

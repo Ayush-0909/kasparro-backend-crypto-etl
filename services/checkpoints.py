@@ -4,38 +4,17 @@ from schemas.crypto import ETLCheckpoint
 
 
 def get_checkpoint(db: Session, source: str):
-    checkpoint = (
-        db.query(ETLCheckpoint)
-        .filter(ETLCheckpoint.source == source)
-        .first()
-    )
-
-    if not checkpoint:
-        checkpoint = ETLCheckpoint(
-            source=source,
-            last_processed_at=None
-        )
-        db.add(checkpoint)
-        db.commit()
-        db.refresh(checkpoint)
-
-    return checkpoint
+    return db.query(ETLCheckpoint).filter_by(source=source).first()
 
 
-def update_checkpoint(db: Session, source: str):
-    checkpoint = (
-        db.query(ETLCheckpoint)
-        .filter(ETLCheckpoint.source == source)
-        .first()
-    )
+def update_checkpoint(db: Session, source: str, last_processed_at: datetime):
+    checkpoint = get_checkpoint(db, source)
 
     if checkpoint:
-        checkpoint.last_processed_at = datetime.utcnow()
+        checkpoint.last_processed_at = last_processed_at
     else:
         checkpoint = ETLCheckpoint(
             source=source,
-            last_processed_at=datetime.utcnow()
+            last_processed_at=last_processed_at,
         )
         db.add(checkpoint)
-
-    db.commit()

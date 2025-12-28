@@ -30,6 +30,7 @@ def run_etl():
 
     try:
         print("🚀 ETL started")
+        
 
         # =========================
         # INGESTION PHASE
