@@ -1,26 +1,17 @@
-from fastapi import FastAPI, Depends, Query
-from sqlalchemy.orm import Session
 import time
 import uuid
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
 
-from core.database import SessionLocal, engine, Base
+from core.database import SessionLocal
 from schemas.crypto import CryptoAsset, ETLRun
-from services.etl_service import get_last_etl_status
 
-# --------------------------------------------------
-# App initialization
-# --------------------------------------------------
+app = FastAPI(title="Crypto ETL Backend")
 
-app = FastAPI(
-    title="Kasparro Crypto ETL API",
-    version="1.0.0",
-    description="Backend API for Crypto ETL System (Kasparro Assignment)"
-)
 
-# --------------------------------------------------
-# Database Dependency
-# --------------------------------------------------
-
+# =========================
+# DB Dependency
+# =========================
 def get_db():
     db = SessionLocal()
     try:
@@ -28,93 +19,78 @@ def get_db():
     finally:
         db.close()
 
-# --------------------------------------------------
-# Root Endpoint (IMPORTANT)
-# --------------------------------------------------
 
-@app.get("/")
-def root():
-    return {
-        "message": "Kasparro Crypto ETL API is running",
-        "docs": "/docs",
-        "health": "/health",
-        "data": "/data"
-    }
-
-# --------------------------------------------------
-# Health Endpoint (P0 REQUIRED)
-# --------------------------------------------------
-
+# =========================
+# HEALTH CHECK
+# =========================
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:
-        db.execute("SELECT 1")
-        db_status = "connected"
+        last_run = (
+            db.query(ETLRun)
+            .order_by(ETLRun.run_time.desc())
+            .first()
+        )
+
+        return {
+            "status": "ok",
+            "db_connected": True,
+            "last_etl_status": last_run.status if last_run else "unknown"
+        }
+
     except Exception:
-        db_status = "disconnected"
+        return {
+            "status": "error",
+            "db_connected": False
+        }
 
-    etl_status = get_last_etl_status(db)
 
-    return {
-        "database": db_status,
-        "etl_last_run": etl_status
-    }
-
-# --------------------------------------------------
-# Data Endpoint (P0 REQUIRED)
-# --------------------------------------------------
-
+# =========================
+# DATA ENDPOINT
+# =========================
 @app.get("/data")
 def get_data(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    symbol: str | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    source: str | None = None,
     db: Session = Depends(get_db)
 ):
-    start_time = time.time()
     request_id = str(uuid.uuid4())
+    start_time = time.time()
 
     query = db.query(CryptoAsset)
 
+    if source:
+        query = query.filter(CryptoAsset.source == source)
 
-    if symbol:
-       query = query.filter(CryptoAsset.symbol.ilike(symbol.upper()))
+    records = query.offset(offset).limit(limit).all()
 
-
-    total = query.count()
-
-    results = (
-        query
-        .offset((page - 1) * limit)
-        .limit(limit)
-        .all()
-    )
+    data = [
+        {
+            "coin_name": r.coin_name,
+            "symbol": r.symbol,
+            "price_usd": r.price_usd,
+            "market_cap": r.market_cap,
+            "volume_24h": r.volume_24h,
+            "source": r.source,
+            "last_updated": r.last_updated
+        }
+        for r in records
+    ]
 
     latency_ms = int((time.time() - start_time) * 1000)
 
     return {
         "request_id": request_id,
         "api_latency_ms": latency_ms,
-        "page": page,
-        "limit": limit,
-        "total_records": total,
-        "data": [
-            {
-                "name": r.name,
-                "symbol": r.symbol,
-                "price_usd": r.price_usd,
-                "market_cap": r.market_cap,
-                "source": r.source,
-                "last_updated": r.last_updated
-            }
-            for r in results
-        ]
+        "count": len(data),
+        "data": data
     }
 
-# --------------------------------------------------
-# Stats Endpoint (P1 REQUIRED)
-# --------------------------------------------------
 
+# =========================
+# STATS ENDPOINT
+# =========================
 @app.get("/stats")
 def stats(db: Session = Depends(get_db)):
     runs = (
@@ -126,11 +102,17 @@ def stats(db: Session = Depends(get_db)):
 
     return {
         "total_runs": len(runs),
-        "recent_runs": [
+        "last_success": next(
+            (r.run_time for r in runs if r.status == "success"), None
+        ),
+        "last_failure": next(
+            (r.run_time for r in runs if r.status == "failed"), None
+        ),
+        "runs": [
             {
-                "status": r.status,
                 "records_processed": r.records_processed,
                 "duration_sec": r.duration_sec,
+                "status": r.status,
                 "run_time": r.run_time
             }
             for r in runs
