@@ -4,7 +4,7 @@ import time
 import uuid
 
 from core.database import SessionLocal, engine, Base
-from schemas.crypto import NormalizedCrypto, ETLRun
+from schemas.crypto import CryptoAsset, ETLRun
 from services.etl_service import get_last_etl_status
 
 # --------------------------------------------------
@@ -74,10 +74,12 @@ def get_data(
     start_time = time.time()
     request_id = str(uuid.uuid4())
 
-    query = db.query(NormalizedCrypto)
+    query = db.query(CryptoAsset)
+
 
     if symbol:
-        query = query.filter(NormalizedCrypto.symbol.ilike(symbol.upper()))
+       query = query.filter(CryptoAsset.symbol.ilike(symbol.upper()))
+
 
     total = query.count()
 
