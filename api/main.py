@@ -1,118 +1,95 @@
-import time
-import uuid
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
+import time
+import uuid
 
-from core.database import SessionLocal
+from core.database import get_db
 from schemas.crypto import CryptoAsset, ETLRun
 
-app = FastAPI(title="Crypto ETL Backend")
+app = FastAPI(title="Kasparro Crypto ETL API")
 
 
-# =========================
-# DB Dependency
-# =========================
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# -----------------------------
+# ROOT (CRITICAL FOR RENDER)
+# -----------------------------
+@app.get("/")
+def root():
+    return {"message": "Kasparro Backend is running"}
 
 
-# =========================
+# -----------------------------
 # HEALTH CHECK
-# =========================
+# -----------------------------
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:
-        last_run = (
-            db.query(ETLRun)
-            .order_by(ETLRun.run_time.desc())
-            .first()
-        )
-
+        db.execute("SELECT 1")
+        etl = db.query(ETLRun).order_by(ETLRun.run_time.desc()).first()
         return {
             "status": "ok",
-            "db_connected": True,
-            "last_etl_status": last_run.status if last_run else "unknown"
+            "database": "connected",
+            "last_etl_status": etl.status if etl else "never run"
         }
-
-    except Exception:
-        return {
-            "status": "error",
-            "db_connected": False
-        }
+    except Exception as e:
+        return {"status": "error", "details": str(e)}
 
 
-# =========================
+# -----------------------------
 # DATA ENDPOINT
-# =========================
+# -----------------------------
 @app.get("/data")
 def get_data(
-    limit: int = 10,
-    offset: int = 0,
+    page: int = 1,
+    limit: int = 20,
     source: str | None = None,
     db: Session = Depends(get_db)
 ):
+    start = time.time()
     request_id = str(uuid.uuid4())
-    start_time = time.time()
 
     query = db.query(CryptoAsset)
-
     if source:
         query = query.filter(CryptoAsset.source == source)
 
-    records = query.offset(offset).limit(limit).all()
-
-    data = [
-        {
-            "coin_name": r.coin_name,
-            "symbol": r.symbol,
-            "price_usd": r.price_usd,
-            "market_cap": r.market_cap,
-            "volume_24h": r.volume_24h,
-            "source": r.source,
-            "last_updated": r.last_updated
-        }
-        for r in records
-    ]
-
-    latency_ms = int((time.time() - start_time) * 1000)
-
-    return {
-        "request_id": request_id,
-        "api_latency_ms": latency_ms,
-        "count": len(data),
-        "data": data
-    }
-
-
-# =========================
-# STATS ENDPOINT
-# =========================
-@app.get("/stats")
-def stats(db: Session = Depends(get_db)):
-    runs = (
-        db.query(ETLRun)
-        .order_by(ETLRun.run_time.desc())
-        .limit(10)
+    total = query.count()
+    results = (
+        query
+        .offset((page - 1) * limit)
+        .limit(limit)
         .all()
     )
 
+    latency = int((time.time() - start) * 1000)
+
+    return {
+        "request_id": request_id,
+        "api_latency_ms": latency,
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "data": results
+    }
+
+
+# -----------------------------
+# STATS ENDPOINT
+# -----------------------------
+@app.get("/stats")
+def stats(db: Session = Depends(get_db)):
+    runs = db.query(ETLRun).order_by(ETLRun.run_time.desc()).all()
+
+    if not runs:
+        return {"message": "No ETL runs yet"}
+
     return {
         "total_runs": len(runs),
-        "last_success": next(
-            (r.run_time for r in runs if r.status == "success"), None
-        ),
-        "last_failure": next(
-            (r.run_time for r in runs if r.status == "failed"), None
-        ),
+        "last_run": runs[0].run_time,
+        "last_status": runs[0].status,
         "runs": [
             {
-                "records_processed": r.records_processed,
-                "duration_sec": r.duration_sec,
                 "status": r.status,
+                "duration_sec": r.duration_sec,
+                "records_processed": r.records_processed,
                 "run_time": r.run_time
             }
             for r in runs
